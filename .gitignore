@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.tox/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Environment secrets — NEVER commit
+backend/.env
+.env
+
+# Trained model artifacts
+backend/models_store/*.pkl
+backend/models_store/*.joblib
+backend/models_store/*.lgbm
+
+# Data files (keep CSV originals, exclude derived)
+backend/dataset/
+*.parquet
+*.feather
+synthetic_*.csv
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
