@@ -218,13 +218,20 @@ def _build_context_text(context: Dict[str, Any]) -> str:
 
     antibiotic = context.get("antibiotic_result")
     if antibiotic:
-        lines.append("\nANTIBIOTIC DEMO MODEL (SYNTHETIC ONLY):")
+        lines.append("\nANTIBIOTIC SUSCEPTIBILITY MODEL (ARMD-ECUH):")
+        if antibiotic.get("organism"):
+            lines.append(f"  Organism: {antibiotic.get('organism')}")
+        if antibiotic.get("antibiotic"):
+            lines.append(f"  Antibiotic: {antibiotic.get('antibiotic')}")
         lines.append(f"  Predicted Class: {antibiotic.get('predicted_class', 'N/A')}")
-        lines.append(f"  ⚠️ {antibiotic.get('data_disclaimer', 'Research use only.')}")
+        if antibiotic.get("probabilities"):
+            lines.append(f"  Probabilities: {antibiotic.get('probabilities')}")
+        lines.append(f"  Data Source: {antibiotic.get('data_source', 'ARMD-ECUH (ECU Health)')}")
+        lines.append(f"  Disclaimer: {antibiotic.get('data_disclaimer', 'Research use only.')}")
 
     shap_values = context.get("shap_values", [])
     if shap_values:
-        lines.append("\nTOP SHAP FEATURES (sepsis model, local explanation):")
+        lines.append("\nTOP SHAP FEATURES (local explanation):")
         for sv in shap_values[:8]:
             direction = "↑" if sv.get("shap_value", 0) > 0 else "↓"
             lines.append(
@@ -237,7 +244,7 @@ def _build_context_text(context: Dict[str, Any]) -> str:
     if missing:
         lines.append(f"\nMISSING FEATURES: {', '.join(missing)}")
 
-    lines.append("\n⚠️ ALL DATA IS SYNTHETIC. Models trained for research demonstration only.")
+    lines.append("\n⚠️ DATA PROVENANCE: Antimicrobial susceptibility model trained on retrospective ARMD-ECUH records. Sepsis and organ dysfunction models are benchmark prototypes. Research evaluation only.")
     return "\n".join(lines)
 
 

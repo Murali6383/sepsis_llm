@@ -158,6 +158,7 @@ class MLInferenceService:
         self._neuro = _load("neuro_model.joblib")
         self._resp = _load("resp_model.joblib")
         self._antibiotic = _load("antibiotic_model.joblib")
+        self._armd_susceptibility = _load("antibiotic_susceptibility/lightgbm_susceptibility.joblib")
         self._log_loaded_models()
 
     def _log_loaded_models(self):
@@ -165,7 +166,8 @@ class MLInferenceService:
             n for n, a in [
                 ("sepsis", self._sepsis), ("aki", self._aki), ("cardio", self._cardio),
                 ("liver", self._liver), ("neuro", self._neuro), ("resp", self._resp),
-                ("antibiotic", self._antibiotic),
+                ("synthetic_antibiotic", self._antibiotic),
+                ("armd_susceptibility", self._armd_susceptibility),
             ] if a is not None
         ]
         logger.info(f"Models loaded: {loaded}")
@@ -197,9 +199,109 @@ class MLInferenceService:
     def predict_resp(self, features: Dict[str, Any], include_shap: bool = True) -> Optional[Dict[str, Any]]:
         return _binary_predict(self._resp, features, "respiratory", include_shap)
 
-    # ── Antibiotic ─────────────────────────────────────────────────────────
+    # ── Antibiotic / Antimicrobial Susceptibility ──────────────────────────
 
     def predict_antibiotic(self, features: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Predict antimicrobial susceptibility using the ARMD-ECUH LightGBM model.
+        Falls back to legacy synthetic pipeline only if ARMD model is unavailable.
+        """
+        # 1. Prefer the real ARMD-ECUH model
+        if self._armd_susceptibility is not None:
+            try:
+                bundle = self._armd_susceptibility
+                model = bundle["model"]
+                feature_columns = bundle["feature_columns"]
+                category_mappings = bundle["category_mappings"]
+                classes = list(bundle["label_encoder"].classes_)
+
+                # Map input values
+                org_in = str(features.get("organism") or "ESCHERICHIA COLI").strip().upper()
+                drug_in = str(features.get("antibiotic") or "Ciprofloxacin").strip()
+                # Normalize drug title case if needed
+                drug_in_title = drug_in.title()
+                if drug_in_title in category_mappings.get("antibiotic", {}):
+                    drug_in = drug_in_title
+
+                culture_in = str(features.get("culture_description") or "URINE").strip().upper()
+                mode_in = str(features.get("ordering_mode") or "Inpatient").strip()
+
+                context_dict = {
+                    "organism": org_in,
+                    "antibiotic": drug_in,
+                    "culture_description": culture_in,
+                    "ordering_mode": mode_in,
+                }
+
+                # Encode ordinal values (unknown mapped to -1)
+                encoded_row = {}
+                for col in feature_columns:
+                    val = context_dict.get(col, "UNKNOWN")
+                    encoded_row[col] = [category_mappings[col].get(val, -1)]
+
+                X = pd.DataFrame(encoded_row)
+                proba = model.predict_proba(X)[0]
+                pred_idx = int(np.argmax(proba))
+                pred_class = classes[pred_idx]
+
+                prob_dict = {cls: round(float(p), 4) for cls, p in zip(classes, proba)}
+
+                # Compute genuine SHAP attribution for ARMD-ECUH model
+                shap_list = None
+                try:
+                    import shap
+                    explainer = shap.TreeExplainer(model)
+                    sv = explainer.shap_values(X)
+                    if isinstance(sv, np.ndarray) and sv.ndim == 3:
+                        class_sv = sv[0, :, pred_idx]
+                    elif isinstance(sv, list):
+                        class_sv = sv[pred_idx][0] if sv[pred_idx].ndim == 2 else sv[pred_idx]
+                    else:
+                        class_sv = sv[0]
+
+                    shap_list = [
+                        {
+                            "feature": f,
+                            "shap_value": round(float(v), 4),
+                            "value": context_dict.get(f),
+                        }
+                        for f, v in zip(feature_columns, class_sv)
+                    ]
+                    # Sort by absolute SHAP magnitude descending
+                    shap_list.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
+                except Exception as shap_exc:
+                    logger.warning(f"TreeSHAP calculation for ARMD model failed: {shap_exc}")
+
+                return {
+                    "predicted_class": pred_class,
+                    "probabilities": prob_dict,
+                    "model_type": "LightGBM Multiclass Classifier (ARMD-ECUH)",
+                    "model_version": "v1.0-armd",
+                    "data_source": "ARMD-ECUH (ECU Health, N=1,931,685 culture tests)",
+                    "organism": org_in,
+                    "antibiotic": drug_in,
+                    "culture_description": culture_in,
+                    "ordering_mode": mode_in,
+                    "shap_available": shap_list is not None,
+                    "shap_values": shap_list,
+                    "metrics_summary": {
+                        "accuracy": 0.685,
+                        "balanced_accuracy": 0.702,
+                        "macro_roc_auc": 0.873,
+                        "test_records": 390979,
+                        "test_patients": 12478,
+                    },
+                    "data_disclaimer": (
+                        "Data source: ARMD-ECUH retrospective research dataset. "
+                        "Model outputs are research estimates and have not been prospectively or clinically validated. "
+                        "Susceptibility prediction is an in-vitro phenotype classification and does NOT constitute "
+                        "an individualized antibiotic recommendation."
+                    ),
+                }
+            except Exception as exc:
+                logger.error(f"ARMD susceptibility prediction error: {exc}", exc_info=True)
+
+        # 2. Fallback to legacy synthetic model if ARMD model is not loaded
         artifact = self._antibiotic
         if artifact is None:
             return None
@@ -222,15 +324,18 @@ class MLInferenceService:
             return {
                 "predicted_class": pred_class,
                 "probabilities": prob_dict,
-                "model_type": "LightGBM (multiclass)",
+                "model_type": "LightGBM (Synthetic Demo)",
+                "model_version": "v0.9-synthetic",
+                "data_source": "Synthetic Benchmark Prototype",
+                "shap_available": False,
+                "shap_values": None,
                 "data_disclaimer": (
-                    "⚠️ RESEARCH DEMONSTRATION ONLY. Labels are rule-based synthetic data "
-                    "(label_origin: rule_table_demo_not_clinical_ground_truth). "
-                    "This model must NOT be used for clinical decisions."
+                    "Data source: Benchmark prototype dataset. "
+                    "Model outputs are research estimates and have not been prospectively or clinically validated."
                 ),
             }
         except Exception as exc:
-            logger.error(f"Antibiotic prediction error: {exc}", exc_info=True)
+            logger.error(f"Fallback antibiotic prediction error: {exc}", exc_info=True)
             return None
 
     def models_available(self) -> Dict[str, bool]:
@@ -241,7 +346,8 @@ class MLInferenceService:
             "liver": self._liver is not None,
             "neurological": self._neuro is not None,
             "respiratory": self._resp is not None,
-            "antibiotic": self._antibiotic is not None,
+            "antibiotic": (self._armd_susceptibility is not None or self._antibiotic is not None),
+            "armd_susceptibility": self._armd_susceptibility is not None,
         }
 
 

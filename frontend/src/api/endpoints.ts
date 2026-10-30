@@ -55,6 +55,17 @@ export const chatWithAI = (data: ChatRequest) =>
 export const generateReport = (data: ReportRequest) =>
   api.post<ReportResponse>('/api/ai/report', data).then(r => r.data);
 
-// ── Antibiotic Suitability ────────────────────────────────────────────────────
+// ── Antibiotic Suitability / ARMD-ECUH Susceptibility ─────────────────────────
 export const predictAntibiotic = (features: Record<string, unknown>) =>
   api.post<AntibioticPredictionResponse>('/api/ai/antibiotic-suitability', features).then(r => r.data);
+
+// ── PDF Report & Evaluation Metrics ───────────────────────────────────────────
+export const downloadPDFReport = async (data: ReportRequest): Promise<Blob> => {
+  const response = await api.post('/api/ai/report/pdf', data, {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+export const getModelEvaluationMetrics = () =>
+  api.get<Record<string, unknown>>('/api/ai/report/model-evaluation').then(r => r.data);

@@ -7,6 +7,7 @@ Start with: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +23,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
+# ── Lifespan ───────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("SepsisGuardian AI backend starting up …")
+    from app.services.ml_service import get_ml_service
+    ml = get_ml_service()
+    available = ml.models_available()
+    logger.info(f"ML model availability at startup: {available}")
+    missing = [k for k, v in available.items() if not v]
+    if missing:
+        logger.warning(
+            f"Missing models: {missing}. "
+            "Run: cd backend && python -m app.models.train_models"
+        )
+    yield
+    logger.info("SepsisGuardian AI backend shutting down …")
+
 # ── App ───────────────────────────────────────────────────────────────────────
 settings = get_settings()
 
@@ -31,11 +49,13 @@ app = FastAPI(
         "Explainable AI Framework for Sepsis Risk Prediction, "
         "Multi-Organ Dysfunction Assessment, Antibiotic Susceptibility Analysis, "
         "and Groq LLM-Based Clinical Research Explanations.\n\n"
-        "⚠️ All datasets are synthetic. For research demonstration only."
+        "Data source: ARMD-ECUH retrospective research dataset for antimicrobial susceptibility "
+        "and research benchmark prototypes for sepsis/organ dysfunction."
     ),
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
@@ -65,18 +85,3 @@ app.include_router(ai.router)
 @app.get("/health", tags=["System"])
 def health():
     return {"status": "ok", "service": "SepsisGuardian AI"}
-
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("SepsisGuardian AI backend starting up …")
-    from app.services.ml_service import get_ml_service
-    ml = get_ml_service()
-    available = ml.models_available()
-    logger.info(f"ML model availability at startup: {available}")
-    missing = [k for k, v in available.items() if not v]
-    if missing:
-        logger.warning(
-            f"Missing models: {missing}. "
-            "Run: cd backend && python -m app.models.train_models"
-        )

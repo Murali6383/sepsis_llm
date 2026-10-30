@@ -1,0 +1,263 @@
+{
+  "dataset": "ARMD-ECUH (00_microbiology_cultures_cohort.csv)",
+  "evaluation_protocol": "Patient-level GroupShuffleSplit (anon_id) - 80% train, 20% test",
+  "total_records": 150000,
+  "unique_patients": 48282,
+  "train_records": 119757,
+  "test_records": 30243,
+  "classes": [
+    "Intermediate",
+    "Resistant",
+    "Susceptible"
+  ],
+  "feature_columns": [
+    "organism",
+    "antibiotic",
+    "culture_description",
+    "ordering_mode"
+  ],
+  "model_results": {
+    "Logistic Regression": {
+      "accuracy": 0.6366,
+      "balanced_accuracy": 0.6608,
+      "roc_auc_macro_ovr": 0.827,
+      "roc_auc_weighted_ovr": 0.8234,
+      "pr_auc_macro": 0.5247,
+      "brier_score": 0.4674,
+      "macro_f1": 0.4874,
+      "weighted_f1": 0.6951,
+      "classification_report": {
+        "Intermediate": {
+          "precision": 0.12586970271979758,
+          "recall": 0.7509433962264151,
+          "f1-score": 0.21560130010834236,
+          "support": 1060.0
+        },
+        "Resistant": {
+          "precision": 0.4093467731378453,
+          "recall": 0.5893328307576329,
+          "f1-score": 0.48312089609887987,
+          "support": 5306.0
+        },
+        "Susceptible": {
+          "precision": 0.9417076167076167,
+          "recall": 0.6420823386522595,
+          "f1-score": 0.7635530542620216,
+          "support": 23877.0
+        },
+        "accuracy": 0.6366431901597064,
+        "macro avg": {
+          "precision": 0.4923080308550865,
+          "recall": 0.6607861885454359,
+          "f1-score": 0.48742508348974795,
+          "support": 30243.0
+        },
+        "weighted avg": {
+          "precision": 0.8197126153913354,
+          "recall": 0.6366431901597064,
+          "f1-score": 0.6951470796359419,
+          "support": 30243.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          796,
+          145,
+          119
+        ],
+        [
+          1349,
+          3127,
+          830
+        ],
+        [
+          4179,
+          4367,
+          15331
+        ]
+      ]
+    },
+    "Random Forest": {
+      "accuracy": 0.7014,
+      "balanced_accuracy": 0.6929,
+      "roc_auc_macro_ovr": 0.8535,
+      "roc_auc_weighted_ovr": 0.8555,
+      "pr_auc_macro": 0.5847,
+      "brier_score": 0.4709,
+      "macro_f1": 0.5389,
+      "weighted_f1": 0.7439,
+      "classification_report": {
+        "Intermediate": {
+          "precision": 0.15957671957671957,
+          "recall": 0.7113207547169811,
+          "f1-score": 0.2606741573033708,
+          "support": 1060.0
+        },
+        "Resistant": {
+          "precision": 0.4685860352482174,
+          "recall": 0.6564266867696947,
+          "f1-score": 0.5468247115158176,
+          "support": 5306.0
+        },
+        "Susceptible": {
+          "precision": 0.9386784628144872,
+          "recall": 0.7109770909243205,
+          "f1-score": 0.809113007006339,
+          "support": 23877.0
+        },
+        "accuracy": 0.7014185100684456,
+        "macro avg": {
+          "precision": 0.5222804058798081,
+          "recall": 0.6929081774703322,
+          "f1-score": 0.5388706252751758,
+          "support": 30243.0
+        },
+        "weighted avg": {
+          "precision": 0.828895760420589,
+          "recall": 0.7014185100684456,
+          "f1-score": 0.7438732200619931,
+          "support": 30243.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          754,
+          121,
+          185
+        ],
+        [
+          899,
+          3483,
+          924
+        ],
+        [
+          3072,
+          3829,
+          16976
+        ]
+      ]
+    },
+    "XGBoost": {
+      "accuracy": 0.8485,
+      "balanced_accuracy": 0.4905,
+      "roc_auc_macro_ovr": 0.879,
+      "roc_auc_weighted_ovr": 0.8765,
+      "pr_auc_macro": 0.6394,
+      "brier_score": 0.2223,
+      "macro_f1": 0.5144,
+      "weighted_f1": 0.8237,
+      "classification_report": {
+        "Intermediate": {
+          "precision": 0.5625,
+          "recall": 0.02547169811320755,
+          "f1-score": 0.048736462093862815,
+          "support": 1060.0
+        },
+        "Resistant": {
+          "precision": 0.7440702781844802,
+          "recall": 0.4788918205804749,
+          "f1-score": 0.5827313381492948,
+          "support": 5306.0
+        },
+        "Susceptible": {
+          "precision": 0.8622852875280059,
+          "recall": 0.9671231729279223,
+          "f1-score": 0.9117002586019701,
+          "support": 23877.0
+        },
+        "accuracy": 0.8484608008464769,
+        "macro avg": {
+          "precision": 0.7229518552374953,
+          "recall": 0.4904955638738682,
+          "f1-score": 0.514389352948376,
+          "support": 30243.0
+        },
+        "weighted avg": {
+          "precision": 0.8310376849635634,
+          "recall": 0.8484608008464769,
+          "f1-score": 0.8237377311999105,
+          "support": 30243.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          27,
+          98,
+          935
+        ],
+        [
+          12,
+          2541,
+          2753
+        ],
+        [
+          9,
+          776,
+          23092
+        ]
+      ]
+    },
+    "LightGBM": {
+      "accuracy": 0.705,
+      "balanced_accuracy": 0.7186,
+      "roc_auc_macro_ovr": 0.8727,
+      "roc_auc_weighted_ovr": 0.8729,
+      "pr_auc_macro": 0.6307,
+      "brier_score": 0.3933,
+      "macro_f1": 0.5492,
+      "weighted_f1": 0.7524,
+      "classification_report": {
+        "Intermediate": {
+          "precision": 0.14774355300859598,
+          "recall": 0.7783018867924528,
+          "f1-score": 0.24834437086092714,
+          "support": 1060.0
+        },
+        "Resistant": {
+          "precision": 0.5253633936517353,
+          "recall": 0.6675461741424802,
+          "f1-score": 0.5879814077025233,
+          "support": 5306.0
+        },
+        "Susceptible": {
+          "precision": 0.946196349835352,
+          "recall": 0.7100138208317628,
+          "f1-score": 0.8112647748480644,
+          "support": 23877.0
+        },
+        "accuracy": 0.7049565188638693,
+        "macro avg": {
+          "precision": 0.5397677654985611,
+          "recall": 0.7186206272555653,
+          "f1-score": 0.5491968511371715,
+          "support": 30243.0
+        },
+        "weighted avg": {
+          "precision": 0.8443777594128862,
+          "recall": 0.7049565188638693,
+          "f1-score": 0.7523606590427341,
+          "support": 30243.0
+        }
+      },
+      "confusion_matrix": [
+        [
+          825,
+          74,
+          161
+        ],
+        [
+          961,
+          3542,
+          803
+        ],
+        [
+          3798,
+          3126,
+          16953
+        ]
+      ]
+    }
+  },
+  "best_overall_model": "LightGBM",
+  "rationale": "LightGBM achieved the best balance of balanced accuracy, macro PR-AUC, and calibration across all three susceptibility classes."
+}

@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.core.config import get_settings
 from app.core.security import TokenPayload, get_current_user
@@ -16,11 +16,17 @@ from app.schemas.schemas import (
     ChatResponse,
     ExplainRequest,
     ExplainResponse,
+    PDFReportRequest,
     ReportRequest,
     ReportResponse,
 )
 from app.services.groq_service import get_groq_service
 from app.services.ml_service import get_ml_service
+from app.services.pdf_report_service import (
+    generate_clinical_pdf_report,
+    load_model_comparison,
+    load_armd_metrics,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["AI / LLM"])
@@ -178,20 +184,75 @@ def generate_report(
     )
 
 
-# ── Antibiotic Suitability ────────────────────────────────────────────────────────
+# ── PDF Report Generation ──────────────────────────────────────────────────────
+
+@router.post("/report/pdf")
+def generate_pdf_report(
+    request: PDFReportRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Generate a professional downloadable clinical research PDF report.
+    Includes actual model predictions, ARMD-ECUH susceptibility, SHAP attributions,
+    and empirical multi-model benchmark evaluation tables.
+    """
+    try:
+        pdf_bytes = generate_clinical_pdf_report(
+            sepsis_result=request.sepsis_result,
+            organ_results=request.organ_results,
+            antibiotic_result=request.antibiotic_result,
+            shap_values=request.shap_values,
+            patient_ref=request.patient_ref,
+            input_features=request.input_features,
+        )
+    except Exception as exc:
+        logger.error(f"PDF generation error: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF report: {str(exc)}",
+        )
+
+    timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"sepsis_guardian_report_{timestamp_str}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+@router.get("/report/model-evaluation")
+def get_model_evaluation(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return empirical benchmark comparison results and ARMD-ECUH test metrics.
+    Compares LightGBM, XGBoost, Random Forest, and Logistic Regression.
+    """
+    comparison = load_model_comparison()
+    metrics = load_armd_metrics()
+    return {
+        "model_comparison": comparison,
+        "armd_metrics": metrics,
+    }
+
+
+# ── Antibiotic / Antimicrobial Susceptibility ──────────────────────────────────
 
 @router.post("/antibiotic-suitability", response_model=AntibioticPredictionResponse)
+@router.post("/antimicrobial-susceptibility", response_model=AntibioticPredictionResponse)
 def antibiotic_suitability(
     request: AntibioticFeaturesRequest,
     user: TokenPayload = Depends(get_current_user),
 ):
     """
-    Predict antibiotic recommendation using a LightGBM multiclass model.
+    Predict antimicrobial susceptibility (Susceptible, Resistant, Intermediate)
+    using the LightGBM model trained on the ARMD-ECUH clinical microbiology cohort.
 
-    ⚠️ RESEARCH DEMONSTRATION ONLY.
-    The training labels are rule-based synthetic data
-    (label_origin: rule_table_demo_not_clinical_ground_truth).
-    This endpoint must NOT be used for clinical decisions.
+    Data source: ARMD-ECUH retrospective research dataset (ECU Health).
+    Outputs are research estimates and have not been prospectively or clinically validated.
     """
     ml = get_ml_service()
     features = request.model_dump()
@@ -200,8 +261,8 @@ def antibiotic_suitability(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "Antibiotic model is not available. "
-                "Run training first: python -m app.models.train_models"
+                "Antimicrobial susceptibility model is not available. "
+                "Ensure backend/models_store/antibiotic_susceptibility artifacts exist."
             ),
         )
     return AntibioticPredictionResponse(**result)

@@ -15,7 +15,7 @@ from app.core.security import create_access_token
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client():
     with TestClient(app) as c:
         yield c
@@ -112,31 +112,51 @@ def test_sepsis_prediction_invalid_age(client, auth_headers):
 
 
 def test_antibiotic_prediction_valid(client, auth_headers):
+    # Test with real ARMD-ECUH microbiology features
     payload = {
-        "age": 55, "gender": "M", "heart_rate": 100, "systolic_bp": 120,
-        "diastolic_bp": 80, "map": 93, "respiratory_rate": 18, "temperature": 37.5,
-        "spo2": 98, "wbc": 9.0, "lactate": 1.5, "creatinine": 1.0, "bilirubin": 0.8,
-        "platelets": 200, "glucose": 95, "crp": 5.0, "urine_output": 50,
-        "gcs": 15, "vasopressor": 0, "mechanical_ventilation": 0,
-        "infection_source_synthetic": "urinary", "beta_lactam_allergy_synthetic": 0,
-        "egfr_computed": 90, "renal_dose_adjustment_review": 0,
+        "organism": "ESCHERICHIA COLI",
+        "antibiotic": "Ciprofloxacin",
+        "culture_description": "URINE",
+        "ordering_mode": "Inpatient",
     }
     resp = client.post("/api/ai/antibiotic-suitability", json=payload, headers=auth_headers)
-    assert resp.status_code in (200, 503)
-    if resp.status_code == 200:
-        data = resp.json()
-        assert "predicted_class" in data
-        assert "RESEARCH" in data["data_disclaimer"].upper() or "SYNTHETIC" in data["data_disclaimer"].upper()
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["predicted_class"] in ["Susceptible", "Resistant", "Intermediate"]
+    assert "ARMD-ECUH" in data["data_source"]
+    assert "probabilities" in data
+    assert data["shap_available"] is True
 
 
-def test_antibiotic_invalid_infection_source(client, auth_headers):
+def test_generate_pdf_report_valid(client, auth_headers):
     payload = {
-        "age": 55, "gender": "M", "gcs": 15, "vasopressor": 0,
-        "mechanical_ventilation": 0, "infection_source_synthetic": "invalid_source",
-        "beta_lactam_allergy_synthetic": 0, "renal_dose_adjustment_review": 0,
+        "sepsis_result": {"sepsis_probability": 0.82, "sepsis_label": 1, "risk_level": "high"},
+        "organ_results": [{"organ": "acute_kidney_injury", "probability": 0.71, "risk_level": "high", "label": 1}],
+        "antibiotic_result": {
+            "organism": "ESCHERICHIA COLI",
+            "antibiotic": "Ciprofloxacin",
+            "predicted_class": "Resistant",
+            "probabilities": {"Susceptible": 0.3421, "Resistant": 0.5499, "Intermediate": 0.1080},
+        },
+        "shap_values": [
+            {"feature": "organism", "shap_value": 0.12, "value": "ESCHERICHIA COLI"},
+            {"feature": "antibiotic", "shap_value": 1.09, "value": "Ciprofloxacin"},
+        ],
+        "patient_ref": "PT-TEST-001",
     }
-    resp = client.post("/api/ai/antibiotic-suitability", json=payload, headers=auth_headers)
-    assert resp.status_code == 422
+    resp = client.post("/api/ai/report/pdf", json=payload, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert "attachment" in resp.headers.get("content-disposition", "")
+    assert resp.content.startswith(b"%PDF-")
+
+
+def test_get_model_evaluation_metrics(client, auth_headers):
+    resp = client.get("/api/ai/report/model-evaluation", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "model_comparison" in data
+    assert "armd_metrics" in data
 
 
 # ── AI / LLM route tests ────────────────────────────────────────────────────────

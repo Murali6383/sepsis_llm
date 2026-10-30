@@ -48,7 +48,7 @@ export function DashboardPage({ username, role, onLogout }: DashboardPageProps) 
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'sepsis', label: '🦠 Sepsis & Organs' },
-    { id: 'antibiotic', label: '💊 Antibiotic Demo' },
+    { id: 'antibiotic', label: '💊 Susceptibility (ARMD-ECUH)' },
     { id: 'explain', label: '✨ AI Explain' },
     { id: 'chat', label: '🤖 AI Chat' },
     { id: 'report', label: '📄 Research Report' },
@@ -115,12 +115,13 @@ export function DashboardPage({ username, role, onLogout }: DashboardPageProps) 
 
         {activeTab === 'antibiotic' && (
           <div>
-            <h1 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '1.5rem' }}>
-              Antibiotic Suitability Demo
+            <h1 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+              Antimicrobial Susceptibility Analysis (ARMD-ECUH)
             </h1>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-              This panel uses a <strong>separate LightGBM multiclass model</strong> with its own inputs.
-              It is entirely independent of the sepsis prediction model.
+              Trained on 1.93M microbiology culture records from the <strong>ARMD-ECUH</strong> cohort
+              (Dryad DOI: 10.5061/dryad.7sqv9s55x) with patient-level group validation (zero data leakage)
+              and TreeSHAP feature attributions.
             </p>
             <AntibioticPanel onResultChange={setAntibioticResult} />
           </div>

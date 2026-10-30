@@ -24,13 +24,14 @@ def test_ml_service_loads_sepsis_model():
 
 
 def test_ml_service_loads_antibiotic_model():
-    """Antibiotic model file must exist and load."""
+    """Antibiotic model file (both ARMD-ECUH and legacy) must exist and load."""
     from app.services.ml_service import _load
-    artifact = _load("antibiotic_model.joblib")
-    assert artifact is not None
-    assert "pipeline" in artifact
-    assert "label_encoder" in artifact
-    assert "classes" in artifact
+    armd_artifact = _load("antibiotic_susceptibility/lightgbm_susceptibility.joblib")
+    assert armd_artifact is not None
+    assert "model" in armd_artifact
+    assert "label_encoder" in armd_artifact
+    assert "category_mappings" in armd_artifact
+    assert set(armd_artifact["label_encoder"].classes_) == {"Intermediate", "Resistant", "Susceptible"}
 
 
 def test_sepsis_prediction_returns_valid_probability():
@@ -64,35 +65,30 @@ def test_sepsis_score_not_reused_as_organ_score():
     aki_features = {"age": 65, "creatinine": 1.8}
     aki_result = svc.predict_aki(aki_features, include_shap=False)
     if aki_result is not None and sepsis_result is not None:
-        # The organ score should NOT simply equal the sepsis probability
-        # (unless they coincidentally match on this input, which is extremely unlikely for different models)
-        # We just verify the organ result has its own "organ" label
         assert aki_result.get("organ") == "acute_kidney_injury"
         assert "probability" in aki_result
 
 
 def test_antibiotic_prediction_returns_valid_class():
-    """Antibiotic model must predict a valid class from its label set."""
-    from app.services.ml_service import MLInferenceService, _load
+    """ARMD-ECUH model must predict a valid class from its label set (Susceptible, Resistant, Intermediate)."""
+    from app.services.ml_service import MLInferenceService
     svc = MLInferenceService()
-    artifact = _load("antibiotic_model.joblib")
-    valid_classes = artifact["classes"]
 
     features = {
-        "age": 55, "gender": "M", "heart_rate": 100, "systolic_bp": 120,
-        "diastolic_bp": 80, "map": 93, "respiratory_rate": 18, "temperature": 37.5,
-        "spo2": 98, "wbc": 9.0, "lactate": 1.5, "creatinine": 1.0, "bilirubin": 0.8,
-        "platelets": 200, "glucose": 95, "crp": 5.0, "urine_output": 50,
-        "gcs": 15, "vasopressor": 0, "mechanical_ventilation": 0,
-        "infection_source_synthetic": "urinary", "beta_lactam_allergy_synthetic": 0,
-        "egfr_computed": 90, "renal_dose_adjustment_review": 0,
+        "organism": "ESCHERICHIA COLI",
+        "antibiotic": "Ciprofloxacin",
+        "culture_description": "URINE",
+        "ordering_mode": "Inpatient",
     }
     result = svc.predict_antibiotic(features)
     assert result is not None
-    assert result["predicted_class"] in valid_classes
+    assert result["predicted_class"] in ["Susceptible", "Resistant", "Intermediate"]
     assert "probabilities" in result
-    assert abs(sum(result["probabilities"].values()) - 1.0) < 0.01  # probabilities sum to ~1
-    assert "RESEARCH DEMONSTRATION" in result["data_disclaimer"].upper() or "SYNTHETIC" in result["data_disclaimer"].upper()
+    assert abs(sum(result["probabilities"].values()) - 1.0) < 0.01
+    assert "ARMD-ECUH" in result["data_source"]
+    assert "ARMD-ECUH" in result["data_disclaimer"]
+    assert result["shap_available"] is True
+    assert len(result["shap_values"]) > 0
 
 
 def test_antibiotic_model_independent_of_sepsis():

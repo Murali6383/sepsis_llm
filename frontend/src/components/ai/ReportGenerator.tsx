@@ -1,11 +1,12 @@
 /**
  * Research Report Generator Component.
- * Generates a structured report using actual model outputs via POST /api/ai/report.
- * Allows copy-to-clipboard and text download. Does not invent values.
+ * Generates a structured research report using actual model outputs via POST /api/ai/report
+ * and exports publication-grade clinical PDFs via POST /api/ai/report/pdf.
+ * Does not invent values or fabricate clinical measurements.
  */
 import React, { useState } from 'react';
 import type { PatientContext } from '../../types';
-import { generateReport } from '../../api/endpoints';
+import { generateReport, downloadPDFReport } from '../../api/endpoints';
 import { extractErrorMessage } from '../../api/client';
 import { Spinner, ErrorBox, LLMTag, Disclaimer } from '../shared';
 
@@ -17,8 +18,16 @@ interface ReportGeneratorProps {
 export function ReportGenerator({ patientContext, llmConfigured }: ReportGeneratorProps) {
   const [report, setReport] = useState<{ text: string; generatedAt: string; disclaimer: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const hasContext = Boolean(
+    patientContext.sepsis_result ||
+    (patientContext.organ_results && patientContext.organ_results.length > 0) ||
+    patientContext.antibiotic_result
+  );
 
   const handleGenerate = async () => {
     if (loading) return;
@@ -44,6 +53,8 @@ export function ReportGenerator({ patientContext, llmConfigured }: ReportGenerat
         antibiotic_result: patientContext.antibiotic_result
           ? {
               predicted_class: patientContext.antibiotic_result.predicted_class,
+              organism: patientContext.antibiotic_result.organism,
+              antibiotic: patientContext.antibiotic_result.antibiotic,
               data_disclaimer: patientContext.antibiotic_result.data_disclaimer,
             }
           : undefined,
@@ -62,6 +73,60 @@ export function ReportGenerator({ patientContext, llmConfigured }: ReportGenerat
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    setPdfError(null);
+
+    try {
+      const blob = await downloadPDFReport({
+        sepsis_result: patientContext.sepsis_result
+          ? {
+              sepsis_probability: patientContext.sepsis_result.sepsis_probability,
+              sepsis_label: patientContext.sepsis_result.sepsis_label,
+              risk_level: patientContext.sepsis_result.risk_level,
+              model_type: patientContext.sepsis_result.model_type,
+            }
+          : undefined,
+        organ_results: patientContext.organ_results?.map(o => ({
+          organ: o.organ,
+          probability: o.probability,
+          label: o.label,
+          risk_level: o.risk_level,
+        })),
+        antibiotic_result: patientContext.antibiotic_result
+          ? {
+              predicted_class: patientContext.antibiotic_result.predicted_class,
+              probabilities: patientContext.antibiotic_result.probabilities,
+              organism: patientContext.antibiotic_result.organism,
+              antibiotic: patientContext.antibiotic_result.antibiotic,
+              culture_description: patientContext.antibiotic_result.culture_description,
+              ordering_mode: patientContext.antibiotic_result.ordering_mode,
+              data_disclaimer: patientContext.antibiotic_result.data_disclaimer,
+            }
+          : undefined,
+        shap_values: [
+          ...(patientContext.sepsis_result?.shap_values?.slice(0, 5) ?? []),
+          ...(patientContext.antibiotic_result?.shap_values?.slice(0, 4) ?? []),
+        ],
+        patient_ref: 'PT-CLINICAL-SUMMARY',
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `SepsisGuardian_Report_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setPdfError(extractErrorMessage(err));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const handleCopy = () => {
     if (!report) return;
     navigator.clipboard.writeText(report.text).then(() => {
@@ -70,7 +135,7 @@ export function ReportGenerator({ patientContext, llmConfigured }: ReportGenerat
     });
   };
 
-  const handleDownload = () => {
+  const handleDownloadTxt = () => {
     if (!report) return;
     const blob = new Blob([report.text + '\n\n' + report.disclaimer], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -81,65 +146,99 @@ export function ReportGenerator({ patientContext, llmConfigured }: ReportGenerat
     URL.revokeObjectURL(url);
   };
 
-  if (!llmConfigured) {
-    return (
-      <div className="error-box">
-        Groq LLM not configured. Set <code>GROQ_API_KEY</code> in <code>backend/.env</code>.
-      </div>
-    );
-  }
-
-  const hasContext =
-    patientContext.sepsis_result ||
-    (patientContext.organ_results?.length ?? 0) > 0 ||
-    patientContext.antibiotic_result;
-
   return (
     <div>
-      <Disclaimer text="Report is generated by Groq LLM from model outputs only. Contains no real patient data. For research use only." />
+      <Disclaimer text="Report is compiled from verified model outputs and empirical ARMD-ECUH microbiology evaluations. For research demonstration only." />
 
       {!hasContext && (
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>
-          Run at least one prediction before generating a report.
-        </p>
+        <div style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1.25rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '6px' }}>
+          ℹ️ Please run sepsis risk evaluation or ARMD-ECUH antimicrobial susceptibility prediction to populate the report data.
+        </div>
       )}
 
-      <button
-        className="btn btn-primary"
-        onClick={handleGenerate}
-        disabled={loading || !hasContext}
-      >
-        {loading ? <><Spinner size={16} /> Generating Report…</> : '📄 Generate Research Report'}
-      </button>
+      {/* Action Buttons Row */}
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+        <button
+          className="btn btn-primary"
+          onClick={handleGenerate}
+          disabled={loading || !hasContext || !llmConfigured}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          {loading ? (
+            <>
+              <Spinner size={16} /> Synthesizing LLM Narrative…
+            </>
+          ) : (
+            '📝 Generate Research Report'
+          )}
+        </button>
 
-      {error && <div style={{ marginTop: '1rem' }}><ErrorBox message={error} onRetry={handleGenerate} /></div>}
+        <button
+          className="btn"
+          onClick={handleDownloadPdf}
+          disabled={downloadingPdf || !hasContext}
+          style={{
+            background: '#0284c7',
+            color: '#ffffff',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.5rem 1rem',
+            borderRadius: '6px',
+            fontWeight: 600,
+            cursor: downloadingPdf || !hasContext ? 'not-allowed' : 'pointer',
+            opacity: downloadingPdf || !hasContext ? 0.6 : 1,
+          }}
+        >
+          {downloadingPdf ? (
+            <>
+              <Spinner size={16} /> Generating PDF…
+            </>
+          ) : (
+            '📥 Download Publication-Grade PDF'
+          )}
+        </button>
+      </div>
 
+      {!llmConfigured && (
+        <div style={{ fontSize: '0.8rem', color: '#b45309', background: '#fffbeb', padding: '0.5rem 0.75rem', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #fde68a' }}>
+          ⚠️ Groq LLM not configured in backend/.env — text report requires Groq, but PDF export with empirical model tables remains fully functional.
+        </div>
+      )}
+
+      {error && <div style={{ marginBottom: '1rem' }}><ErrorBox message={error} onRetry={handleGenerate} /></div>}
+      {pdfError && <div style={{ marginBottom: '1rem' }}><ErrorBox message={pdfError} onRetry={handleDownloadPdf} /></div>}
+
+      {/* Generated Report View */}
       {report && (
         <div style={{ marginTop: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
             <LLMTag />
-            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
               Generated: {report.generatedAt}
             </span>
             <button className="btn btn-outline btn-sm" onClick={handleCopy}>
-              {copied ? '✓ Copied' : '📋 Copy'}
+              {copied ? '✓ Copied' : '📋 Copy Text'}
             </button>
-            <button className="btn btn-outline btn-sm" onClick={handleDownload}>
+            <button className="btn btn-outline btn-sm" onClick={handleDownloadTxt}>
               ⬇ Download .txt
             </button>
           </div>
 
           <pre
             style={{
-              background: 'var(--color-surface-2)',
+              background: '#f8fafc',
               borderRadius: '8px',
               padding: '1.25rem',
               whiteSpace: 'pre-wrap',
               fontSize: '0.85rem',
               lineHeight: 1.65,
-              border: '1px solid var(--color-border)',
+              border: '1px solid #e2e8f0',
               maxHeight: '500px',
               overflowY: 'auto',
+              color: '#1e293b',
+              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
             }}
           >
             {report.text}

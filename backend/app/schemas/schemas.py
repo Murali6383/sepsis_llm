@@ -114,11 +114,18 @@ class OrganRiskResponse(BaseModel):
     shap_values: Optional[List[Dict[str, Any]]] = None
 
 
-# ── Antibiotic Suitability ────────────────────────────────────────────────────
+# ── Antibiotic / Antimicrobial Susceptibility ──────────────────────────────────
 
 class AntibioticFeaturesRequest(BaseModel):
-    age: float = Field(..., ge=0, le=120)
-    gender: str = Field(..., pattern="^[MF]$")
+    # Real ARMD-ECUH clinical fields
+    organism: Optional[str] = Field(None, max_length=128)
+    antibiotic: Optional[str] = Field(None, max_length=128)
+    culture_description: Optional[str] = Field("URINE", max_length=64)
+    ordering_mode: Optional[str] = Field("Inpatient", max_length=64)
+
+    # Patient encounter & legacy demo fields (optional for backward compatibility)
+    age: Optional[float] = Field(None, ge=0, le=120)
+    gender: Optional[str] = Field(None, max_length=10)
     heart_rate: Optional[float] = Field(None, ge=0, le=300)
     systolic_bp: Optional[float] = Field(None, ge=0, le=300)
     diastolic_bp: Optional[float] = Field(None, ge=0, le=200)
@@ -134,26 +141,43 @@ class AntibioticFeaturesRequest(BaseModel):
     glucose: Optional[float] = Field(None, ge=0, le=1000)
     crp: Optional[float] = Field(None, ge=0)
     urine_output: Optional[float] = Field(None, ge=0)
-    gcs: int = Field(..., ge=3, le=15)
-    vasopressor: int = Field(..., ge=0, le=1)
-    mechanical_ventilation: int = Field(..., ge=0, le=1)
-    infection_source_synthetic: str = Field(
-        ...,
-        pattern="^(urinary|pneumonia|bloodstream_unknown|intra_abdominal|skin_soft_tissue)$",
-    )
-    beta_lactam_allergy_synthetic: int = Field(..., ge=0, le=1)
+    gcs: Optional[int] = Field(None, ge=3, le=15)
+    vasopressor: Optional[int] = Field(None, ge=0, le=1)
+    mechanical_ventilation: Optional[int] = Field(None, ge=0, le=1)
+    infection_source_synthetic: Optional[str] = None
+    beta_lactam_allergy_synthetic: Optional[int] = Field(None, ge=0, le=1)
     egfr_computed: Optional[float] = Field(None, ge=0)
-    renal_dose_adjustment_review: int = Field(..., ge=0, le=1)
+    renal_dose_adjustment_review: Optional[int] = Field(None, ge=0, le=1)
 
 
 class AntibioticPredictionResponse(BaseModel):
     predicted_class: str
     probabilities: Dict[str, float]
-    model_type: str
+    model_type: str = "LightGBM Multiclass Classifier"
+    model_version: str = "v1.0-armd"
+    data_source: str = "ARMD-ECUH (ECU Health, N=1,931,685 culture tests)"
+    organism: Optional[str] = None
+    antibiotic: Optional[str] = None
+    culture_description: Optional[str] = None
+    ordering_mode: Optional[str] = None
+    shap_available: bool = False
+    shap_values: Optional[List[Dict[str, Any]]] = None
+    metrics_summary: Optional[Dict[str, Any]] = None
     data_disclaimer: str = (
-        "⚠️ RESEARCH DEMONSTRATION ONLY. Labels are rule-based synthetic data "
-        "(not clinical ground truth). This model must NOT be used for clinical decisions."
+        "Data source: ARMD-ECUH retrospective research dataset. "
+        "Model outputs are research estimates and have not been prospectively or clinically validated. "
+        "Susceptibility prediction is an in-vitro phenotype classification and does NOT constitute "
+        "an individualized antibiotic recommendation."
     )
+
+
+class PDFReportRequest(BaseModel):
+    sepsis_result: Optional[Dict[str, Any]] = None
+    organ_results: Optional[List[Dict[str, Any]]] = None
+    antibiotic_result: Optional[Dict[str, Any]] = None
+    shap_values: Optional[List[Dict[str, Any]]] = None
+    patient_ref: Optional[str] = Field("PT-ANON-DEMO", max_length=64)
+    input_features: Optional[Dict[str, Any]] = None
 
 
 # ── AI / LLM ──────────────────────────────────────────────────────────────────
@@ -204,8 +228,10 @@ class ReportResponse(BaseModel):
     report_text: str
     generated_at: str
     disclaimer: str = (
-        "RESEARCH ONLY — All datasets are synthetic. This report does not constitute "
-        "a clinical assessment, diagnosis, or treatment recommendation."
+        "RESEARCH USE ONLY — Antimicrobial susceptibility predictions are derived from "
+        "the retrospective ARMD-ECUH dataset (ECU Health); sepsis and organ risk models "
+        "are research prototypes. This report does not constitute a medical diagnosis "
+        "or individual treatment recommendation."
     )
 
 

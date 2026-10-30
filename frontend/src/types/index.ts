@@ -44,11 +44,27 @@ export interface OrganRiskResponse {
   shap_values: ShapValue[] | null;
 }
 
+export interface AntibioticFeaturesRequest {
+  organism: string;
+  antibiotic: string;
+  culture_description?: string;
+  ordering_mode?: string;
+}
+
 export interface AntibioticPredictionResponse {
   predicted_class: string;
   probabilities: Record<string, number>;
   model_type: string;
+  model_version?: string;
+  data_source?: string;
+  organism?: string;
+  antibiotic?: string;
+  culture_description?: string;
+  ordering_mode?: string;
   data_disclaimer: string;
+  shap_available?: boolean;
+  shap_values?: ShapValue[] | null;
+  metrics_summary?: Record<string, unknown> | null;
 }
 
 // ── AI/LLM ────────────────────────────────────────────────────────────────────
