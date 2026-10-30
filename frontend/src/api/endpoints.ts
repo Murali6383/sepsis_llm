@@ -9,6 +9,7 @@ import type {
   SepsisPredictionResponse,
   OrganRiskResponse,
   AntibioticPredictionResponse,
+  PatientAntibioticSuitabilityResponse,
   AIHealthResponse,
   ChatRequest,
   ChatResponse,
@@ -58,6 +59,16 @@ export const generateReport = (data: ReportRequest) =>
 // ── Antibiotic Suitability / ARMD-ECUH Susceptibility ─────────────────────────
 export const predictAntibiotic = (features: Record<string, unknown>) =>
   api.post<AntibioticPredictionResponse>('/api/ai/antibiotic-suitability', features).then(r => r.data);
+
+export const predictPatientAntibioticSuitability = (
+  payload: Record<string, unknown>
+) =>
+  api
+    .post<PatientAntibioticSuitabilityResponse>(
+      '/api/ai/patient-antibiotic-suitability',
+      payload
+    )
+    .then(r => r.data);
 
 // ── PDF Report & Evaluation Metrics ───────────────────────────────────────────
 export const downloadPDFReport = async (data: ReportRequest): Promise<Blob> => {

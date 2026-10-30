@@ -218,16 +218,33 @@ def _build_context_text(context: Dict[str, Any]) -> str:
 
     antibiotic = context.get("antibiotic_result")
     if antibiotic:
-        lines.append("\nANTIBIOTIC SUSCEPTIBILITY MODEL (ARMD-ECUH):")
-        if antibiotic.get("organism"):
-            lines.append(f"  Organism: {antibiotic.get('organism')}")
+        lines.append("\nANTIBIOTIC SUSCEPTIBILITY & SUITABILITY MODEL (ARMD-ECUH):")
+        if antibiotic.get("organism") or antibiotic.get("identified_organism"):
+            lines.append(f"  Organism: {antibiotic.get('organism') or antibiotic.get('identified_organism')}")
         if antibiotic.get("antibiotic"):
             lines.append(f"  Antibiotic: {antibiotic.get('antibiotic')}")
-        lines.append(f"  Predicted Class: {antibiotic.get('predicted_class', 'N/A')}")
+        if antibiotic.get("predicted_class"):
+            lines.append(f"  Predicted Class: {antibiotic.get('predicted_class')}")
         if antibiotic.get("probabilities"):
             lines.append(f"  Probabilities: {antibiotic.get('probabilities')}")
+
+        ranked = antibiotic.get("ranked_candidates", [])
+        if ranked and isinstance(ranked, list):
+            lines.append("  PATIENT-SPECIFIC SUITABILITY RANKINGS (Top Candidates):")
+            for cand in ranked[:5]:
+                c_name = cand.get("antibiotic", "Unknown")
+                c_score = cand.get("suitability_score", 0.0)
+                c_ast = cand.get("predicted_susceptibility", "Unknown")
+                c_res = cand.get("resistance_probability", 0.0)
+                c_tier = cand.get("stewardship_tier", "Broad-Spectrum Reserve")
+                c_warn = "; ".join(cand.get("warnings", [])) or "No contraindications noted"
+                lines.append(
+                    f"    • Rank #{cand.get('rank', 1)}: {c_name} | Suitability: {c_score}% | "
+                    f"Phenotype: {c_ast} | P(Resist): {c_res*100:.1f}% | Tier: {c_tier} | Warnings: {c_warn}"
+                )
+
         lines.append(f"  Data Source: {antibiotic.get('data_source', 'ARMD-ECUH (ECU Health)')}")
-        lines.append(f"  Disclaimer: {antibiotic.get('data_disclaimer', 'Research use only.')}")
+        lines.append(f"  Disclaimer: {antibiotic.get('data_disclaimer') or antibiotic.get('disclaimer', 'Research use only.')}")
 
     shap_values = context.get("shap_values", [])
     if shap_values:

@@ -20,6 +20,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Automatic unauthorized handler for expired tokens
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // If request fails with 401 and is not the login attempt itself, dispatch unauthorized event
+    if (
+      error.response?.status === 401 &&
+      !error.config?.url?.includes('/api/auth/login')
+    ) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user_role');
+      localStorage.removeItem('username');
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Safe error extraction — never expose stack traces to UI
 export function extractErrorMessage(err: unknown): string {
   if (err instanceof AxiosError) {

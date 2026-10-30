@@ -20,6 +20,9 @@ vi.mock('../api/endpoints', () => ({
   predictNeuro: vi.fn(),
   predictResp: vi.fn(),
   predictAntibiotic: vi.fn(),
+  predictPatientAntibioticSuitability: vi.fn(),
+  downloadPDFReport: vi.fn(),
+  getModelEvaluationMetrics: vi.fn(),
   login: vi.fn(),
 }));
 
@@ -28,6 +31,7 @@ import { AIChat } from '../components/ai/AIChat';
 import { AIExplainPanel } from '../components/ai/AIExplainPanel';
 import { ReportGenerator } from '../components/ai/ReportGenerator';
 import { ShapDisplay } from '../components/ai/ShapDisplay';
+import { AntibioticPanel } from '../components/dashboard/AntibioticPanel';
 import { ErrorBox, RiskBadge, Disclaimer } from '../components/shared';
 
 // ── Shared context ─────────────────────────────────────────────────────────────
@@ -254,6 +258,70 @@ describe('ReportGenerator', () => {
     await waitFor(() => {
       const reportText = screen.getByText(/ceftriaxone/);
       expect(reportText).toBeInTheDocument();
+    });
+  });
+});
+
+// ── Antibiotic Panel (Patient-Specific & ARMD-ECUH) ───────────────────────────
+
+describe('AntibioticPanel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders patient clinical parameters and disclaimer', () => {
+    render(<AntibioticPanel onResultChange={vi.fn()} />);
+    expect(screen.getByText(/Patient Clinical Parameters & Antimicrobial Context/i)).toBeInTheDocument();
+    expect(screen.getByText(/ARMD-ECUH retrospective research dataset/i)).toBeInTheDocument();
+  });
+
+  it('executes patient-specific antibiotic suitability ranking', async () => {
+    const mockResponse = {
+      identified_organism: 'ESCHERICHIA COLI',
+      infection_site: 'URINE',
+      patient_summary: { age: 65, egfr: 65 },
+      ranked_candidates: [
+        {
+          antibiotic: 'Ceftriaxone',
+          rank: 1,
+          suitability_score: 84.5,
+          predicted_susceptibility: 'Susceptible',
+          resistance_probability: 0.12,
+          susceptibility_probability: 0.82,
+          intermediate_probability: 0.06,
+          stewardship_tier: 'First-Line Preferred',
+          allergy_contraindication: false,
+          warnings: ['Renal Sparing: No dose modification required.'],
+          shap_values: [{ feature: 'organism', shap_value: -0.15, value: 'ESCHERICHIA COLI' }],
+        },
+        {
+          antibiotic: 'Ampicillin',
+          rank: 2,
+          suitability_score: 10.0,
+          predicted_susceptibility: 'Resistant',
+          resistance_probability: 0.88,
+          susceptibility_probability: 0.08,
+          intermediate_probability: 0.04,
+          stewardship_tier: 'First-Line Preferred',
+          allergy_contraindication: true,
+          warnings: ['CONTRAINDICATION: Documented penicillin allergy.'],
+          shap_values: [],
+        },
+      ],
+      model_architecture: 'LightGBM + Patient-specific feature analysis + TreeSHAP explainability',
+      data_source: 'ARMD-ECUH retrospective research dataset (Dryad DOI: 10.5061/dryad.7sqv9s55x)',
+      disclaimer: 'Predictions are research estimates and require clinical validation.',
+    };
+
+    (endpoints.predictPatientAntibioticSuitability as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+
+    render(<AntibioticPanel onResultChange={vi.fn()} />);
+    fireEvent.click(screen.getByText(/Predict & Rank Antimicrobial Suitability/i));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Ceftriaxone').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('85%')).toBeInTheDocument();
+      expect(screen.getByText(/CONTRAINDICATED/i)).toBeInTheDocument();
     });
   });
 });

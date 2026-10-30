@@ -156,6 +156,19 @@ def generate_clinical_pdf_report(
         spaceBefore=12,
         spaceAfter=6,
     )
+    
+    
+    h2_style = ParagraphStyle(
+    "ReportH2",
+    parent=styles["Heading2"],
+    fontName="Helvetica-Bold",
+    fontSize=10,
+    leading=13,
+    textColor=primary_color,
+    spaceBefore=8,
+    spaceAfter=5,
+    )
+
     body_style = ParagraphStyle(
         "ReportBody",
         parent=styles["Normal"],
@@ -374,6 +387,54 @@ def generate_clinical_pdf_report(
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
         story.append(ast_table)
+
+        # Render Patient-Specific Candidate Ranking if present
+        ranked = antibiotic_result.get("ranked_candidates")
+        if ranked and isinstance(ranked, list) and len(ranked) > 0:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("<b>Patient-Specific Candidate Antibiotic Ranking & Safety Analysis</b>", h2_style))
+            ranked_headers = [
+                Paragraph("<b>Rank</b>", table_cell_bold),
+                Paragraph("<b>Antibiotic</b>", table_cell_bold),
+                Paragraph("<b>Suitability</b>", table_cell_bold),
+                Paragraph("<b>Predicted AST</b>", table_cell_bold),
+                Paragraph("<b>P(Resist)</b>", table_cell_bold),
+                Paragraph("<b>Stewardship Tier</b>", table_cell_bold),
+                Paragraph("<b>Key Warnings & Contraindications</b>", table_cell_bold),
+            ]
+            ranked_rows = [ranked_headers]
+            for item in ranked[:6]:
+                warn_text = "<br/>".join([f"• {w[:75]}..." if len(w) > 75 else f"• {w}" for w in item.get("warnings", [])[:2]])
+                if not warn_text:
+                    warn_text = "<font color='#16a34a'>✓ No contraindications noted</font>"
+                contra = item.get("allergy_contraindication", False)
+                score_str = f"<b>{item.get('suitability_score', 0):.1f}%</b>"
+                if contra:
+                    score_str += " <font color='#dc2626'>[Contraindicated]</font>"
+
+                ast_str = item.get("predicted_susceptibility", "Unknown")
+                res_prob = f"{item.get('resistance_probability', 0.0) * 100:.1f}%"
+
+                ranked_rows.append([
+                    Paragraph(f"#{item.get('rank', 1)}", table_cell_bold),
+                    Paragraph(f"<b>{item.get('antibiotic', '')}</b>", table_cell),
+                    Paragraph(score_str, table_cell),
+                    Paragraph(ast_str, table_cell),
+                    Paragraph(res_prob, table_cell),
+                    Paragraph(item.get("stewardship_tier", "Broad-Spectrum Reserve"), table_cell),
+                    Paragraph(warn_text, table_cell),
+                ])
+
+            ranked_table = Table(ranked_rows, colWidths=[0.5 * inch, 1.4 * inch, 1.1 * inch, 0.9 * inch, 0.8 * inch, 1.1 * inch, 1.2 * inch])
+            ranked_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+                ("BOX", (0, 0), (-1, -1), 0.5, border_color),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]))
+            story.append(ranked_table)
     else:
         story.append(Paragraph("<i>No antimicrobial susceptibility prediction requested or available.</i>", body_style))
 

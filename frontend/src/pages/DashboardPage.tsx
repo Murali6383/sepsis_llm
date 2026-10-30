@@ -4,7 +4,13 @@
  * Maintains shared patient context for LLM features.
  */
 import React, { useState, useEffect } from 'react';
-import type { SepsisPredictionResponse, OrganRiskResponse, AntibioticPredictionResponse, AIHealthResponse } from '../types';
+import type {
+  SepsisPredictionResponse,
+  OrganRiskResponse,
+  AntibioticPredictionResponse,
+  PatientAntibioticSuitabilityResponse,
+  AIHealthResponse,
+} from '../types';
 import { getAIHealth } from '../api/endpoints';
 import { SepsisDashboard } from '../components/dashboard/SepsisDashboard';
 import { AntibioticPanel } from '../components/dashboard/AntibioticPanel';
@@ -29,7 +35,9 @@ export function DashboardPage({ username, role, onLogout }: DashboardPageProps) 
   // Shared patient context — filled by prediction components
   const [sepsisResult, setSepsisResult] = useState<SepsisPredictionResponse | null>(null);
   const [organResults, setOrganResults] = useState<OrganRiskResponse[]>([]);
-  const [antibioticResult, setAntibioticResult] = useState<AntibioticPredictionResponse | null>(null);
+  const [antibioticResult, setAntibioticResult] = useState<
+    AntibioticPredictionResponse | PatientAntibioticSuitabilityResponse | null
+  >(null);
 
   useEffect(() => {
     getAIHealth()

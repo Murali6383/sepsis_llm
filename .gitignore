@@ -52,3 +52,20 @@ desktop.ini
 .vscode/settings.json
 .idea/
 *.swp
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.vscode/

@@ -244,3 +244,55 @@ def test_groq_api_key_not_exposed_in_any_response(client, auth_headers):
         body = resp.text
         assert "GROQ_API_KEY" not in body
         assert "sk-" not in body  # common API key prefix patterns
+
+
+def test_patient_antibiotic_suitability_valid(client, auth_headers):
+    payload = {
+        "patient_age": 68,
+        "patient_gender": "M",
+        "infection_site": "URINE",
+        "identified_organism": "ESCHERICHIA COLI",
+        "drug_allergies": ["Penicillins"],
+        "antibiotic_resistance_profile": ["Fluoroquinolone-Resistant"],
+        "previous_antibiotic_exposure": ["Ciprofloxacin"],
+        "creatinine": 2.4,
+        "egfr": 26.0,
+        "current_medications": ["Warfarin", "NSAIDs"],
+    }
+    resp = client.post("/api/ai/patient-antibiotic-suitability", json=payload, headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "ranked_candidates" in data
+    assert len(data["ranked_candidates"]) > 0
+    assert "patient_summary" in data
+    assert "ARMD-ECUH" in data["data_source"]
+
+    # Verify ranking structure
+    first = data["ranked_candidates"][0]
+    assert first["rank"] == 1
+    assert 0.0 <= first["suitability_score"] <= 100.0
+    assert first["predicted_susceptibility"] in ["Susceptible", "Resistant", "Intermediate"]
+
+    # Verify allergy contraindication for Ampicillin
+    amp_items = [c for c in data["ranked_candidates"] if c["antibiotic"] == "Ampicillin"]
+    if amp_items:
+        assert amp_items[0]["allergy_contraindication"] is True
+        assert "penicillin" in amp_items[0]["allergy_warning"].lower()
+
+    # Verify renal warning for Gentamicin due to eGFR < 30
+    gent_items = [c for c in data["ranked_candidates"] if c["antibiotic"] == "Gentamicin"]
+    if gent_items:
+        assert "nephrotoxicity" in gent_items[0]["renal_warning"].lower()
+
+
+def test_patient_antibiotic_suitability_requires_auth(client):
+    payload = {
+        "patient_age": 50,
+        "patient_gender": "F",
+        "infection_site": "URINE",
+        "identified_organism": "ESCHERICHIA COLI",
+        "creatinine": 1.0,
+        "egfr": 90.0,
+    }
+    resp = client.post("/api/ai/patient-antibiotic-suitability", json=payload)
+    assert resp.status_code == 401

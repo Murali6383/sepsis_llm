@@ -11,6 +11,8 @@ from app.core.security import TokenPayload, get_current_user
 from app.schemas.schemas import (
     AntibioticFeaturesRequest,
     AntibioticPredictionResponse,
+    PatientAntibioticSuitabilityRequest,
+    PatientAntibioticSuitabilityResponse,
     AIHealthResponse,
     ChatRequest,
     ChatResponse,
@@ -266,3 +268,28 @@ def antibiotic_suitability(
             ),
         )
     return AntibioticPredictionResponse(**result)
+
+
+@router.post("/patient-antibiotic-suitability", response_model=PatientAntibioticSuitabilityResponse)
+def patient_antibiotic_suitability(
+    request: PatientAntibioticSuitabilityRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Predicts and ranks potentially suitable antimicrobial options using:
+    - ARMD-ECUH microbiology culture predictions
+    - Patient-specific clinical parameters (Age, Gender, eGFR, Creatinine, Liver, Site)
+    - Documented drug allergies and contraindications
+    - Prior antibiotic exposure and resistance profile (ESBL, MRSA, etc.)
+    - Drug-drug interactions with concurrent medications
+    - TreeSHAP explainability per candidate
+    - Antimicrobial stewardship tiering
+
+    Data source: ARMD-ECUH retrospective research dataset (Dryad DOI: 10.5061/dryad.7sqv9s55x).
+    Predictions are research estimates and require clinical validation.
+    They are not prescriptions or substitutes for antimicrobial stewardship and clinician judgment.
+    """
+    ml = get_ml_service()
+    payload = request.model_dump()
+    result = ml.predict_patient_antibiotic_suitability(payload)
+    return PatientAntibioticSuitabilityResponse(**result)

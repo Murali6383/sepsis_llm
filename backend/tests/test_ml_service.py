@@ -150,3 +150,48 @@ def test_shap_values_for_sepsis():
             assert "feature" in sv
             assert "shap_value" in sv
             assert isinstance(sv["shap_value"], float)
+
+
+def test_patient_specific_suitability_ranking():
+    """Verify patient-specific antibiotic suitability ranking and clinical safety logic."""
+    from app.services.ml_service import MLInferenceService
+    svc = MLInferenceService()
+
+    req = {
+        "patient_age": 72,
+        "patient_gender": "F",
+        "infection_site": "URINE",
+        "identified_organism": "ESCHERICHIA COLI",
+        "drug_allergies": ["Penicillins"],
+        "antibiotic_resistance_profile": [],
+        "previous_antibiotic_exposure": [],
+        "creatinine": 1.1,
+        "egfr": 75.0,
+        "current_medications": [],
+    }
+
+    result = svc.predict_patient_antibiotic_suitability(req)
+    assert result is not None
+    assert "ranked_candidates" in result
+    candidates = result["ranked_candidates"]
+    assert len(candidates) >= 5
+
+    # Ranks must be in order 1, 2, 3...
+    ranks = [c["rank"] for c in candidates]
+    assert ranks == list(range(1, len(candidates) + 1))
+
+    # Ampicillin must have allergy contraindication
+    amp = next(c for c in candidates if c["antibiotic"] == "Ampicillin")
+    assert amp["allergy_contraindication"] is True
+    assert amp["suitability_score"] <= 15.0
+
+    # Test renal contraindication with severe kidney impairment
+    req_renal = {
+        **req,
+        "creatinine": 3.8,
+        "egfr": 18.0,
+    }
+    result_renal = svc.predict_patient_antibiotic_suitability(req_renal)
+    candidates_renal = result_renal["ranked_candidates"]
+    gent = next(c for c in candidates_renal if c["antibiotic"] == "Gentamicin")
+    assert "nephrotoxicity" in gent["renal_warning"].lower()

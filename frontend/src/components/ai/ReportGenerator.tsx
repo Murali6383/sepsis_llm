@@ -52,10 +52,28 @@ export function ReportGenerator({ patientContext, llmConfigured }: ReportGenerat
         })),
         antibiotic_result: patientContext.antibiotic_result
           ? {
-              predicted_class: patientContext.antibiotic_result.predicted_class,
-              organism: patientContext.antibiotic_result.organism,
-              antibiotic: patientContext.antibiotic_result.antibiotic,
-              data_disclaimer: patientContext.antibiotic_result.data_disclaimer,
+              predicted_class:
+                patientContext.antibiotic_result.predicted_class || 'Evaluated',
+              organism:
+                ('organism' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.organism
+                  : undefined) ||
+                ('identified_organism' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.identified_organism
+                  : undefined),
+              antibiotic:
+                'antibiotic' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.antibiotic
+                  : undefined,
+              ranked_candidates:
+                'ranked_candidates' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.ranked_candidates
+                  : undefined,
+              data_disclaimer:
+                patientContext.antibiotic_result.data_disclaimer ||
+                ('disclaimer' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.disclaimer
+                  : undefined),
             }
           : undefined,
         shap_values: patientContext.sepsis_result?.shap_values?.slice(0, 8) ?? [],
@@ -96,18 +114,51 @@ export function ReportGenerator({ patientContext, llmConfigured }: ReportGenerat
         })),
         antibiotic_result: patientContext.antibiotic_result
           ? {
-              predicted_class: patientContext.antibiotic_result.predicted_class,
-              probabilities: patientContext.antibiotic_result.probabilities,
-              organism: patientContext.antibiotic_result.organism,
-              antibiotic: patientContext.antibiotic_result.antibiotic,
-              culture_description: patientContext.antibiotic_result.culture_description,
-              ordering_mode: patientContext.antibiotic_result.ordering_mode,
-              data_disclaimer: patientContext.antibiotic_result.data_disclaimer,
+              predicted_class:
+                patientContext.antibiotic_result.predicted_class || 'Evaluated',
+              probabilities:
+                'probabilities' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.probabilities
+                  : undefined,
+              organism:
+                ('organism' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.organism
+                  : undefined) ||
+                ('identified_organism' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.identified_organism
+                  : undefined),
+              antibiotic:
+                'antibiotic' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.antibiotic
+                  : undefined,
+              ranked_candidates:
+                'ranked_candidates' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.ranked_candidates
+                  : undefined,
+              culture_description:
+                ('culture_description' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.culture_description
+                  : undefined) ||
+                ('infection_site' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.infection_site
+                  : undefined),
+              ordering_mode:
+                'ordering_mode' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.ordering_mode
+                  : 'Inpatient',
+              data_disclaimer:
+                patientContext.antibiotic_result.data_disclaimer ||
+                ('disclaimer' in patientContext.antibiotic_result
+                  ? patientContext.antibiotic_result.disclaimer
+                  : undefined),
             }
           : undefined,
         shap_values: [
           ...(patientContext.sepsis_result?.shap_values?.slice(0, 5) ?? []),
-          ...(patientContext.antibiotic_result?.shap_values?.slice(0, 4) ?? []),
+          ...('shap_values' in (patientContext.antibiotic_result || {}) &&
+          Array.isArray((patientContext.antibiotic_result as any)?.shap_values)
+            ? (patientContext.antibiotic_result as any).shap_values.slice(0, 4)
+            : []),
         ],
         patient_ref: 'PT-CLINICAL-SUMMARY',
       });

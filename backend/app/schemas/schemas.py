@@ -114,6 +114,20 @@ class OrganRiskResponse(BaseModel):
     shap_values: Optional[List[Dict[str, Any]]] = None
 
 
+class FullPredictionResponse(BaseModel):
+    sepsis: SepsisPredictionResponse
+    organs: Dict[str, OrganRiskResponse]  # keys: aki, cardio, liver, neuro, resp
+# ── Digital Twin Simulation ─────────────────────────────────
+
+class SimulationRequest(BaseModel):
+    sepsis: SepsisFeaturesRequest
+    aki: AKIFeaturesRequest
+    cardio: CardioFeaturesRequest
+    liver: LiverFeaturesRequest
+    neuro: NeuroFeaturesRequest
+    resp: RespFeaturesRequest
+
+
 # ── Antibiotic / Antimicrobial Susceptibility ──────────────────────────────────
 
 class AntibioticFeaturesRequest(BaseModel):
@@ -168,6 +182,67 @@ class AntibioticPredictionResponse(BaseModel):
         "Model outputs are research estimates and have not been prospectively or clinically validated. "
         "Susceptibility prediction is an in-vitro phenotype classification and does NOT constitute "
         "an individualized antibiotic recommendation."
+    )
+
+
+# ── Patient-Specific Antibiotic Suitability Schemas ───────────────────────────
+
+class PatientAntibioticSuitabilityRequest(BaseModel):
+    # Patient Demographics & Site
+    patient_age: float = Field(..., ge=0, le=120, description="Patient age in years")
+    patient_gender: str = Field("M", description="Patient gender (M/F/Other)")
+    infection_site: str = Field("URINE", description="Infection site (e.g. URINE, BLOOD, RESPIRATORY, WOUND, ABDOMINAL)")
+    identified_organism: str = Field("ESCHERICHIA COLI", description="Identified microorganism")
+
+    # Resistance Profile & Exposure
+    antibiotic_resistance_profile: Optional[List[str]] = Field(default_factory=list, description="Prior resistance flags, e.g. MRSA, ESBL, VRE, CRE")
+    previous_antibiotic_exposure: Optional[List[str]] = Field(default_factory=list, description="Antibiotics received in past 90 days")
+
+    # Safety & Allergies
+    drug_allergies: Optional[List[str]] = Field(default_factory=list, description="Documented drug allergies")
+
+    # Organ Functions
+    creatinine: float = Field(1.0, ge=0.1, le=25.0, description="Serum creatinine (mg/dL)")
+    egfr: float = Field(90.0, ge=1.0, le=200.0, description="eGFR (mL/min/1.73m2)")
+    total_bilirubin: Optional[float] = Field(None, ge=0.0, le=50.0, description="Total bilirubin (mg/dL)")
+    ast_alt_elevated: Optional[bool] = Field(False, description="Whether transaminases AST/ALT are elevated (>3x ULN)")
+
+    # Current Concurrent Medications
+    current_medications: Optional[List[str]] = Field(default_factory=list, description="Concurrent medications (e.g. Warfarin, NSAIDs, Amiodarone)")
+
+    # Optional subset of candidates
+    candidate_antibiotics: Optional[List[str]] = Field(None, description="Candidate antibiotics to evaluate")
+
+
+class CandidateAntibioticRanking(BaseModel):
+    antibiotic: str
+    rank: int
+    suitability_score: float = Field(..., ge=0.0, le=100.0, description="Overall suitability index score (0-100)")
+    predicted_susceptibility: str = Field(..., description="Susceptible | Intermediate | Resistant")
+    resistance_probability: float = Field(..., ge=0.0, le=1.0)
+    susceptibility_probability: float = Field(..., ge=0.0, le=1.0)
+    intermediate_probability: float = Field(..., ge=0.0, le=1.0)
+    stewardship_tier: str = Field(..., description="First-Line Preferred | Broad-Spectrum Reserve | Restricted / Escalation")
+    allergy_contraindication: bool = False
+    allergy_warning: Optional[str] = None
+    renal_warning: Optional[str] = None
+    hepatic_warning: Optional[str] = None
+    interaction_warning: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
+    shap_values: Optional[List[Dict[str, Any]]] = None
+
+
+class PatientAntibioticSuitabilityResponse(BaseModel):
+    identified_organism: str
+    infection_site: str
+    patient_summary: Dict[str, Any]
+    ranked_candidates: List[CandidateAntibioticRanking]
+    model_architecture: str = "LightGBM + Patient-specific feature analysis + TreeSHAP explainability"
+    data_source: str = "ARMD-ECUH retrospective research dataset (Dryad DOI: 10.5061/dryad.7sqv9s55x)"
+    disclaimer: str = (
+        "Data source: ARMD-ECUH retrospective research dataset (Dryad DOI: 10.5061/dryad.7sqv9s55x). "
+        "Predictions are research estimates and require clinical validation. "
+        "They are not prescriptions or substitutes for antimicrobial stewardship and clinician judgment."
     )
 
 
